@@ -1,0 +1,24 @@
+{"name": "4. PK RTO tracker - courier status (MASTER)", "metadata": {"version": 1, "scenario": {"roundtrips": 1, "maxErrors": 3, "autoCommit": true, "sequential": true, "confidential": false, "dataloss": false, "dlq": false}, "designer": {"orphans": []}}, "flow": [
+{"id": 1, "module": "gateway:CustomWebHook", "version": 1, "parameters": {"hook": null, "maxResults": 1}, "mapper": {}, "metadata": {"designer": {"x": 0, "y": 0, "name": "Courier status webhook: order_id, order_name, phone, city, courier, sku, status"}}},
+{"id": 2, "module": "util:SetVariables", "version": 1, "parameters": {}, "mapper": {"scope": "roundtrip", "variables": [{"name": "is_rto", "value": "{{if(contains(\"rto refused returned\"; lower(1.status)); 1; 0)}}"}, {"name": "is_final", "value": "{{if(contains(\"delivered rto refused returned\"; lower(1.status)); 1; 0)}}"}, {"name": "status_tag", "value": "{{if(contains(\"rto refused returned\"; lower(1.status)); \"rto\"; lower(1.status))}}"}]}, "metadata": {"designer": {"x": 300, "y": 0, "name": "Normalise status"}}},
+{"id": 3, "module": "builtin:BasicRouter", "version": 1, "mapper": null, "metadata": {"designer": {"x": 600, "y": 0}}, "routes": [
+{"flow": [
+{"id": 4, "module": "airtable:ActionCreateRecord", "version": 3, "parameters": {}, "mapper": {"base": "appspopIsF0THCKer", "table": "tblhK6iEKzos8bAue", "typecast": true, "useColumnId": true, "record": {"fld8CQl8czLLy0s5w": "Courier status {{2.status_tag}}: {{1.order_name}}", "fld29uaxQk5VmdXsI": "{{now}}", "fldUPfdwpl2mb1le5": "Orders & Shipping", "fldxsNlnxUGh8Xb3s": "Courier", "fldStlIKxufuTP8MG": "{{1.status}}", "fldSGDQm5YJyb6gFD": "Success", "fldLbMuGJoUDs1O3o": "City: {{1.city}} | Courier: {{1.courier}} | SKU: {{1.sku}} | Phone: {{1.phone}}"}}, "metadata": {"designer": {"x": 900, "y": -300, "name": "Agent Action Log (every status; source for weekly RTO rollup)"}}}
+]},
+{"flow": [
+{"id": 5, "module": "shopify:makeAnApiCall", "version": 3, "parameters": {}, "filter": {"name": "Has Shopify order id", "conditions": [[{"a": "{{1.order_id}}", "o": "exist"}]]}, "mapper": {"query": "mutation { tagsAdd(id: \"{{1.order_id}}\", tags: [\"{{2.status_tag}}\"]) { userErrors { message } } }"}, "metadata": {"designer": {"x": 900, "y": 0, "name": "Tag Shopify order with status"}}}
+]},
+{"flow": [
+{"id": 6, "module": "airtable:ActionSearchRecords", "version": 3, "parameters": {}, "filter": {"name": "Final status only", "conditions": [[{"a": "{{2.is_final}}", "o": "number:equal", "b": "1"}]]}, "mapper": {"base": "appspopIsF0THCKer", "table": "tblPflZUQ9dP2Bh0U", "formulaField": "formula", "formula": "{Phone}='{{1.phone}}'", "maxRecords": 1, "useColumnId": false}, "metadata": {"designer": {"x": 900, "y": 300, "name": "COD Risk: find phone"}}},
+{"id": 7, "module": "builtin:BasicAggregator", "version": 1, "parameters": {"feeder": 6}, "mapper": {"id": "{{6.id}}", "Orders": "{{6.Orders}}", "Refused Count": "{{6.`Refused Count`}}"}, "metadata": {"designer": {"x": 1200, "y": 300, "name": "Found rows (0 or 1)"}}},
+{"id": 8, "module": "builtin:BasicRouter", "version": 1, "mapper": null, "metadata": {"designer": {"x": 1500, "y": 300}}, "routes": [
+{"flow": [
+{"id": 9, "module": "airtable:ActionUpdateRecords", "version": 3, "parameters": {}, "filter": {"name": "Phone exists", "conditions": [[{"a": "{{length(7.array)}}", "o": "number:greater", "b": "0"}]]}, "mapper": {"base": "appspopIsF0THCKer", "table": "tblPflZUQ9dP2Bh0U", "id": "{{7.array[1].id}}", "typecast": true, "useColumnId": true, "record": {"fldx0A1pKlaVYod8E": "{{1.city}}", "fldEFqiCuHUxnQZ0S": "{{7.array[1].Orders + 1}}", "fldbIc4CEoRcSkOID": "{{7.array[1].`Refused Count` + 2.is_rto}}", "fldh0Wx4nUJZRoBJC": "{{if(7.array[1].`Refused Count` + 2.is_rto >= 2; \"Block\"; if(7.array[1].`Refused Count` + 2.is_rto >= 1; \"Watch\"; \"OK\"))}}", "fld0UuQ13SOt7Vcw3": "{{formatDate(now; \"YYYY-MM-DD\")}}"}}, "metadata": {"designer": {"x": 1800, "y": 150, "name": "COD Risk: update counts + flag"}}}
+]},
+{"flow": [
+{"id": 10, "module": "airtable:ActionCreateRecord", "version": 3, "parameters": {}, "filter": {"name": "New phone", "conditions": [[{"a": "{{length(7.array)}}", "o": "number:equal", "b": "0"}]]}, "mapper": {"base": "appspopIsF0THCKer", "table": "tblPflZUQ9dP2Bh0U", "typecast": true, "useColumnId": true, "record": {"fldMGN5CgbwwDNYPw": "{{1.phone}}", "fldx0A1pKlaVYod8E": "{{1.city}}", "fldEFqiCuHUxnQZ0S": 1, "fldbIc4CEoRcSkOID": "{{2.is_rto}}", "fldh0Wx4nUJZRoBJC": "{{if(2.is_rto = 1; \"Watch\"; \"OK\")}}", "fld0UuQ13SOt7Vcw3": "{{formatDate(now; \"YYYY-MM-DD\")}}"}}, "metadata": {"designer": {"x": 1800, "y": 450, "name": "COD Risk: new row"}}}
+]}
+]}
+]}
+]}
+]}
